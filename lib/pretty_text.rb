@@ -93,6 +93,37 @@ module PrettyText
     Rails.root
   end
 
+  def self.find_file(root, filename)
+    return filename if File.file?("#{root}#{filename}")
+
+    es6_name = "#{filename}.js.es6"
+    return es6_name if File.file?("#{root}#{es6_name}")
+
+    js_name = "#{filename}.js"
+    return js_name if File.file?("#{root}#{js_name}")
+  end
+
+  def self.es6_context
+    ctx = MiniRacer::Context.new(timeout: 15000)
+
+    manifest = File.read("#{Rails.root}/app/assets/javascripts/pretty-text-bundle.js")
+    manifest.each_line do |l|
+      if l =~ /\/\/= require \.\/(.*)$/
+        root_path = "#{Rails.root}/app/assets/javascripts/"
+
+        filename = find_file(root_path, Regexp.last_match[1])
+        if filename
+          source = File.read("#{root_path}#{filename}")
+          template = Tilt::ES6ModuleTranspilerTemplate.new {}
+          transpiled = template.module_transpile(source, "#{Rails.root}/app/assets/javascripts/", Regexp.last_match[1])
+          ctx.eval(transpiled)
+        end
+      end
+    end
+
+    ctx
+  end
+
   def self.create_new_context
     # timeout any eval that takes longer than 15 seconds
     ctx = MiniRacer::Context.new(timeout: 15000)
